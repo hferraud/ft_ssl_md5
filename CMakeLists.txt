@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.29)
+project(ft_ssl_md5 C)
+
+set(CMAKE_C_STANDARD 11)
+
+include_directories(include)
+include_directories(lib/libft/include)
+
+add_executable(ft_ssl_md5
+        include/md5.h
+        lib/libft/include/get_next_line.h
+        lib/libft/include/libft.h
+        lib/libft/srcs/char/ft_isalnum.c
+        lib/libft/srcs/char/ft_isalpha.c
+        lib/libft/srcs/char/ft_isascii.c
+        lib/libft/srcs/char/ft_isdigit.c
+        lib/libft/srcs/char/ft_isprint.c
+        lib/libft/srcs/char/ft_issign.c
+        lib/libft/srcs/char/ft_isspace.c
+        lib/libft/srcs/char/ft_tolower.c
+        lib/libft/srcs/char/ft_toupper.c
+        lib/libft/srcs/convert/ft_atoi.c
+        lib/libft/srcs/convert/ft_atoll.c
+        lib/libft/srcs/convert/ft_itoa.c
+        lib/libft/srcs/convert/ft_stoa.c
+        lib/libft/srcs/fd/ft_putchar_fd.c
+        lib/libft/srcs/fd/ft_putendl_fd.c
+        lib/libft/srcs/fd/ft_putnbr_fd.c
+        lib/libft/srcs/fd/ft_putstr_fd.c
+        lib/libft/srcs/get_next_line/get_next_line.c
+        lib/libft/srcs/get_next_line/get_next_line_utils.c
+        lib/libft/srcs/list/ft_lstadd_back.c
+        lib/libft/srcs/list/ft_lstadd_front.c
+        lib/libft/srcs/list/ft_lstclear.c
+        lib/libft/srcs/list/ft_lstdelone.c
+        lib/libft/srcs/list/ft_lstiter.c
+        lib/libft/srcs/list/ft_lstlast.c
+        lib/libft/srcs/list/ft_lstmap.c
+        lib/libft/srcs/list/ft_lstnew.c
+        lib/libft/srcs/list/ft_lstrev.c
+        lib/libft/srcs/list/ft_lstsize.c
+        lib/libft/srcs/memory/ft_bzero.c
+        lib/libft/srcs/memory/ft_calloc.c
+        lib/libft/srcs/memory/ft_memchr.c
+        lib/libft/srcs/memory/ft_memcmp.c
+        lib/libft/srcs/memory/ft_memcpy.c
+        lib/libft/srcs/memory/ft_memmove.c
+        lib/libft/srcs/memory/ft_memset.c
+        lib/libft/srcs/stdout/ft_putchar.c
+        lib/libft/srcs/stdout/ft_putendl.c
+        lib/libft/srcs/stdout/ft_putnbr.c
+        lib/libft/srcs/stdout/ft_putstr.c
+        lib/libft/srcs/string/free_string_array.c
+        lib/libft/srcs/string/ft_split.c
+        lib/libft/srcs/string/ft_strchr.c
+        lib/libft/srcs/string/ft_strcmp.c
+        lib/libft/srcs/string/ft_strcpy.c
+        lib/libft/srcs/string/ft_strdup.c
+        lib/libft/srcs/string/ft_striteri.c
+        lib/libft/srcs/string/ft_strjoin.c
+        lib/libft/srcs/string/ft_strlcat.c
+        lib/libft/srcs/string/ft_strlcpy.c
+        lib/libft/srcs/string/ft_strlen.c
+        lib/libft/srcs/string/ft_strmapi.c
+        lib/libft/srcs/string/ft_strncmp.c
+        lib/libft/srcs/string/ft_strncpy.c
+        lib/libft/srcs/string/ft_strnstr.c
+        lib/libft/srcs/string/ft_strrchr.c
+        lib/libft/srcs/string/ft_strtrim.c
+        lib/libft/srcs/string/ft_substr.c
+        src/hash/md5.c
+        src/main.c)

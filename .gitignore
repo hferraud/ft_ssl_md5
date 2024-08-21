@@ -1,0 +1,4 @@
+.build/
+cmake-build-debug
+.idea
+ft_ssl_md5
