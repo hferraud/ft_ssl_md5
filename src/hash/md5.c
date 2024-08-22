@@ -26,7 +26,10 @@ void md5_init(md5_context_t *context, md5_info_t *info) {
 	info->chunk_index = 0;
 	info->pad_chunk = info->length / 64;
 	info->end_chunk = (info->length % 64) >= 56 ? info->pad_chunk + 1 : info->pad_chunk;
-	(void)context;
+	context->state[A_INDEX] = A_INIT;
+	context->state[B_INDEX] = B_INIT;
+	context->state[C_INDEX] = C_INIT;
+	context->state[D_INDEX] = D_INIT;
 }
 
 void fill_buffer(unsigned char *buffer, md5_info_t *info) {

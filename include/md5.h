@@ -3,6 +3,16 @@
 
 #include <sys/types.h>
 
+#define A_INDEX 0
+#define B_INDEX 1
+#define C_INDEX 2
+#define D_INDEX 3
+
+#define A_INIT 0x67452301;
+#define B_INIT 0xefcdab89;
+#define C_INIT 0x98badcfe;
+#define D_INIT 0x10325476;
+
 #define CHUNK_LEN			64
 #define PADDING_MSG_LEN		8
 #define PADDING_FIRST_BYTE	0x80
