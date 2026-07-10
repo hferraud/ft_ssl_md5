@@ -18,7 +18,7 @@ static ft_ssl_status_t command_router(struct command_s *cmd_router, int argc, ch
 int main(int argc, char **argv) {
     struct command_s commands[] = {
         {"md5", md5_handler},
-        {"sha256", sha256},
+        {"sha256", sha256_handler},
         {0}
     };
 

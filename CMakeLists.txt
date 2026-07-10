@@ -15,6 +15,7 @@ target_sources(ft_ssl PRIVATE
         src/md5/parser.c
         src/sha256/sha256.c
         src/sha256/parser.c
+        src/sha256/crypto.c
 )
 
 target_include_directories(ft_ssl PRIVATE

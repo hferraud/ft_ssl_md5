@@ -11,16 +11,14 @@
 #define STATE_C_INIT 0x98badcfe
 #define STATE_D_INIT 0x10325476
 
-#define F(x, y, z) (((x) & (y)) | (~(x) & (z)))
-#define G(x, y, z) (((x) & (z)) | ((y) & ~(z)))
-#define H(x, y, z) ((x) ^ (y) ^ (z))
-#define I(x, y, z) ((y) ^ ((x) | ~(z)))
-
 #define ROTL(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
 
 #define PADDING_MODULO 64
 #define PADDING_SIZE 8
-#define U32_BLOCK_SIZE 16
+#define BLOCK_SIZE_U32 16
+#define BLOCK_SIZE_U8 64
+#define NB_ROUNDS 64
+#define NB_ROUNDS_ITERATION 16
 
 typedef struct {
     uint32_t a;
@@ -115,8 +113,8 @@ static void md5_process_message(md5_state_t *state, uint8_t *message, size_t siz
         md5_state_t old_state = *state;
         md5_process_block((uint32_t*)message, state);
         md5_state_update(state, &old_state);
-        message += PADDING_MODULO;
-        size -= PADDING_MODULO;
+        message += BLOCK_SIZE_U8;
+        size -= BLOCK_SIZE_U8;
     }
 }
 
@@ -137,8 +135,8 @@ static void md5_process_block(const uint32_t *block, md5_state_t *state) {
     uint32_t f;
     uint32_t g;
 
-    for (size_t i = 0; i < 64; i++) {
-        round = i / 16;
+    for (size_t i = 0; i < NB_ROUNDS; i++) {
+        round = i / NB_ROUNDS_ITERATION;
 
         f = md5_operations[round](state->b, state->c, state->d);
         g = md5_indexes[round](i);
