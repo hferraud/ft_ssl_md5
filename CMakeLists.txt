@@ -4,18 +4,13 @@ project(ft_ssl C)
 
 set(CMAKE_C_STANDARD 23)
 
-add_executable(ft_ssl
-        src/md5/crypto.c
-        src/md5/crypto.h
-)
+add_executable(ft_ssl)
 
 target_sources(ft_ssl PRIVATE
         src/main.c
+        src/parser.c
         src/md5/md5.c
-        src/md5/parser.c
         src/sha256/sha256.c
-        src/sha256/parser.c
-        src/sha256/crypto.c
 )
 
 target_include_directories(ft_ssl PRIVATE

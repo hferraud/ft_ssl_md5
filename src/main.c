@@ -2,31 +2,42 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 
-#include "md5.h"
-#include "sha256.h"
+#include "md5/md5.h"
+#include "sha256/sha256.h"
+#include "parser.h"
+
+typedef ft_ssl_status_t(*hash_function_t) (uint8_t*, size_t, uint8_t*);
 
 struct command_s {
     char *name;
-    ft_ssl_status_t (*callback) (int, char **);
+    char *display_name;
+    size_t digest_size;
+    hash_function_t hash_function;
 };
 
-static void command_help(struct command_s *cmd_router);
-static ft_ssl_status_t command_router(struct command_s *cmd_router, int argc, char **argv);
+static void command_help(struct command_s *command_table);
+static ft_ssl_status_t command_router(struct command_s *command_table, int argc, char **argv);
+static ft_ssl_status_t command_run(struct command_s *command, ft_ssl_options_t *options);
+static ft_ssl_status_t command_run_strings(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest);
+static void print_digest(uint8_t *digest, size_t digest_size);
 
 int main(int argc, char **argv) {
     struct command_s commands[] = {
-        {"md5", md5_handler},
-        {"sha256", sha256_handler},
+        {"md5", "MD5", MD5_DIGEST_SIZE, md5},
+        {"sha256", "SHA256", SHA256_DIGEST_SIZE, sha256},
         {0}
     };
 
     return command_router(commands, argc, argv);
 }
 
-static ft_ssl_status_t command_router(struct command_s *cmd_router, int argc, char **argv) {
+static ft_ssl_status_t command_router(struct command_s *command_table, int argc, char **argv) {
     char *help_tags[] = {"help", "-help", "--help", "-h", "--h", NULL};
+    ft_ssl_options_t options = {0};
 
     if (argc < 2) {
         goto print_help;
@@ -36,26 +47,86 @@ static ft_ssl_status_t command_router(struct command_s *cmd_router, int argc, ch
             goto print_help;
         }
     }
-    while (cmd_router->name != NULL) {
-        if (strcmp(cmd_router->name, argv[1]) == 0) {
+    while (command_table->name != NULL) {
+        if (strcmp(command_table->name, argv[1]) == 0) {
             argc--;
             argv++;
-            return cmd_router->callback(argc, argv);
+            ft_ssl_parser(argc, argv, &options);
+            return command_run(command_table, &options);
         }
-        cmd_router++;
+        command_table++;
     }
     dprintf(STDERR_FILENO, "Invalid command '%s' type \"help\" for a list.\n", argv[1]);
     return FT_SSL_ERROR;
 
     print_help:
-        command_help(cmd_router);
+        command_help(command_table);
         return 0;
 }
 
-static void command_help(struct command_s *cmd_router) {
+static ft_ssl_status_t command_run(struct command_s *command, ft_ssl_options_t *options)
+{
+    uint8_t *digest;
+
+    digest = malloc(command->digest_size);
+    if (digest == NULL)
+    {
+        return FT_SSL_ERROR;
+    }
+    command_run_strings(command, options, digest);
+    free(digest);
+    return FT_SSL_OK;
+}
+
+// static ft_ssl_status_t command_run_stdin(struct command_s *command, ft_ssl_options_t *options)
+// {
+//
+// }
+//
+// static ft_ssl_status_t command_run_file(struct command_s *command, ft_ssl_options_t *options)
+// {
+// }
+
+static ft_ssl_status_t command_run_strings(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest)
+{
+    for (size_t i = 0; i < options->string_count; i++)
+    {
+        if (command->hash_function((uint8_t*)options->strings[i], strlen(options->strings[i]), digest) != FT_SSL_OK)
+        {
+            return FT_SSL_ERROR;
+        }
+        if (options->quiet)
+        {
+            print_digest(digest, command->digest_size);
+        }
+        else if (options->reverse)
+        {
+            print_digest(digest, command->digest_size);
+            printf(" \"%s\"\n", options->strings[i]);
+        }
+        else
+        {
+            printf("%s (\"%s\") = ", command->display_name, options->strings[i]);
+            print_digest(digest, command->digest_size);
+            printf("\n");
+        }
+    }
+    return FT_SSL_OK;
+}
+
+static void command_help(struct command_s *command_table)
+{
     printf("Available commands:\n");
-    while (cmd_router->name != NULL) {
-        printf("\t%s\n", cmd_router->name);
-        cmd_router++;
+    while (command_table->name != NULL) {
+        printf("\t%s\n", command_table->name);
+        command_table++;
+    }
+}
+
+static void print_digest(uint8_t *digest, size_t digest_size)
+{
+    for (size_t i = 0; i < digest_size; i++)
+    {
+        printf("%02x", digest[i]);
     }
 }
