@@ -1,17 +1,17 @@
 #include "sha256.h"
 
 #include <stdlib.h>
-#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "ft_ssl.h"
 
 #define PADDING_MODULO 64
-#define PADDING_SIZE 8
 #define BLOCK_SIZE_U32 16
-#define BLOCK_SIZE_U8 64
 #define SCHEDULE_SIZE_U32 64
+#define SHA256_PADDING_SIZE 8
 
 #define ROTR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
 
@@ -21,17 +21,6 @@
 #define BSIG1(x) (ROTR(x, 6) ^ ROTR(x, 11) ^ ROTR(x, 25))
 #define SSIG0(x) (ROTR(x, 7) ^ ROTR(x, 18) ^ (x >> 3))
 #define SSIG1(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ (x >> 10))
-
-typedef struct {
-    uint32_t a;
-    uint32_t b;
-    uint32_t c;
-    uint32_t d;
-    uint32_t e;
-    uint32_t f;
-    uint32_t g;
-    uint32_t h;
-} sha256_state_t;
 
 static const uint32_t g_sha256_k[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -44,65 +33,133 @@ static const uint32_t g_sha256_k[64] = {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-static void sha256_initialize(sha256_state_t *state);
-static void sha256_finalize(sha256_state_t *state, uint8_t digest[SHA256_DIGEST_SIZE]);
-
-static void sha256_process_message(sha256_state_t *state, uint8_t *message, size_t size);
+static void sha256_get_digest(sha256_state_t *state, uint8_t digest[SHA256_DIGEST_SIZE]);
 static void sha256_process_block(const uint8_t *block, sha256_state_t *state);
-static void sha256_schedule(uint32_t schedule[SCHEDULE_SIZE_U32], const uint8_t block[BLOCK_SIZE_U8]);
+static void sha256_schedule(uint32_t schedule[SCHEDULE_SIZE_U32], const uint8_t block[SHA256_BLOCK_SIZE]);
 static void sha256_state_rotate(sha256_state_t *state, uint32_t t1, uint32_t t2);
 static void sha256_state_update(sha256_state_t *state, const sha256_state_t *old_state);
-
-static uint8_t *sha256_message_pad(uint8_t *message, size_t *size);
-static uint8_t *sha256_message_extend(size_t *size);
-static void sha256_message_fill(uint8_t *ptr, size_t padding);
+static void sha256_message_fill(sha256_ctx *ctx, bool first);
 static void sha256_message_append_size(size_t size, uint8_t *ptr);
 
-ft_ssl_status_t sha256(uint8_t *message, size_t size, uint8_t digest[SHA256_DIGEST_SIZE]) {
-    sha256_state_t state;
-    uint8_t *sha256_message;
-
-    sha256_message = sha256_message_pad(message, &size);
-    if (sha256_message == NULL) {
-        return FT_SSL_ERROR;
-    }
-    sha256_initialize(&state);
-    sha256_process_message(&state, sha256_message, size);
-    free(sha256_message);
-    sha256_finalize(&state, digest);
-    return FT_SSL_OK;
+void sha256_init(sha256_ctx *ctx)
+{
+    ctx->state.a = 0x6a09e667;
+    ctx->state.b = 0xbb67ae85;
+    ctx->state.c = 0x3c6ef372;
+    ctx->state.d = 0xa54ff53a;
+    ctx->state.e = 0x510e527f;
+    ctx->state.f = 0x9b05688c;
+    ctx->state.g = 0x1f83d9ab;
+    ctx->state.h = 0x5be0cd19;
+    ctx->buffer_len = 0;
+    ctx->total_len = 0;
 }
 
-static void sha256_initialize(sha256_state_t *state) {
-    state->a = 0x6a09e667;
-    state->b = 0xbb67ae85;
-    state->c = 0x3c6ef372;
-    state->d = 0xa54ff53a;
-    state->e = 0x510e527f;
-    state->f = 0x9b05688c;
-    state->g = 0x1f83d9ab;
-    state->h = 0x5be0cd19;
-}
-
-static void sha256_finalize(sha256_state_t *state, uint8_t digest[SHA256_DIGEST_SIZE]) {
-    uint32_t *words = (uint32_t*) state;
-
-
-    for (size_t i = 0; i < 8; i++)
+void sha256_update(sha256_ctx *ctx, const uint8_t *data, size_t len)
+{
+    if (ctx->buffer_len != 0 && ctx->buffer_len + len > SHA256_BLOCK_SIZE)
     {
-        for (size_t j = 0; j < 4; j++) {
-            digest[i * 4 + j] = words[i] >> 8 * (3 - j);
-        }
+        //There are leftover data in the buffer and we can process it
+        size_t offset = SHA256_BLOCK_SIZE - ctx->buffer_len;
+        memcpy(ctx->buffer + ctx->buffer_len, data, offset);
+        sha256_state_t old_state = ctx->state;
+        sha256_process_block(ctx->buffer, &ctx->state);
+        sha256_state_update(&ctx->state, &old_state);
+        ctx->total_len += SHA256_BLOCK_SIZE;
+        data += offset;
+        len -= offset;
     }
+    while (len >= SHA256_BLOCK_SIZE)
+    {
+        sha256_state_t old_state = ctx->state;
+        sha256_process_block(data, &ctx->state);
+        sha256_state_update(&ctx->state, &old_state);
+        ctx->total_len += SHA256_BLOCK_SIZE;
+        data += SHA256_BLOCK_SIZE;
+        len -= SHA256_BLOCK_SIZE;
+    }
+    memcpy(ctx->buffer + ctx->buffer_len, data, len);
+    ctx->buffer_len = len;
 }
 
-static void sha256_process_message(sha256_state_t *state, uint8_t *message, size_t size) {
-    while (size > 0) {
-        sha256_state_t old_state = *state;
-        sha256_process_block(message, state);
-        sha256_state_update(state, &old_state);
-        message += BLOCK_SIZE_U8;
-        size -= BLOCK_SIZE_U8;
+void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE])
+{
+    bool padding_flag = false;
+    ctx->total_len += ctx->buffer_len;
+    if (ctx->buffer_len >= SHA256_BLOCK_SIZE - SHA256_PADDING_SIZE)
+    {
+        sha256_message_fill(ctx, true);
+        sha256_state_t old_state = ctx->state;
+        sha256_process_block(ctx->buffer, &ctx->state);
+        sha256_state_update(&ctx->state, &old_state);
+        ctx->buffer_len = 0;
+        padding_flag = true;
+    }
+    sha256_message_fill(ctx, !padding_flag);
+    sha256_message_append_size(ctx->total_len, ctx->buffer + SHA256_BLOCK_SIZE - SHA256_PADDING_SIZE);
+    sha256_state_t old_state = ctx->state;
+    sha256_process_block(ctx->buffer, &ctx->state);
+    sha256_state_update(&ctx->state, &old_state);
+    sha256_get_digest(&ctx->state, digest);
+}
+
+void sha256_str(const char *str, uint8_t digest[SHA256_DIGEST_SIZE])
+{
+    sha256_ctx ctx;
+    size_t len = strlen(str);
+
+    sha256_init(&ctx);
+    sha256_update(&ctx, (uint8_t*)str, len);
+    sha256_final(&ctx, digest);
+}
+
+ssize_t sha256_fd(int fd, bool print, uint8_t digest[SHA256_DIGEST_SIZE])
+{
+    sha256_ctx ctx;
+    uint8_t buf[SHA256_BLOCK_SIZE];
+    ssize_t buf_len;
+    ssize_t total_len = 0;
+
+    sha256_init(&ctx);
+    buf_len = read(fd, buf, SHA256_BLOCK_SIZE);
+    if (buf_len > 0 && print)
+    {
+        printf("(\"");
+    }
+    total_len += buf_len;
+    while (buf_len > 0)
+    {
+        sha256_update(&ctx, buf, buf_len);
+        if (print)
+        {
+            write(STDOUT_FILENO, buf, buf_len);
+        }
+        buf_len = read(fd, buf, SHA256_BLOCK_SIZE);
+        total_len += buf_len;
+    }
+    if (print)
+    {
+        printf("\")");
+    }
+    if (buf_len == -1)
+    {
+        //TODO: Do sum
+        return -1;
+    }
+    sha256_final(&ctx, digest);
+    return total_len;
+}
+
+static void sha256_get_digest(sha256_state_t *state, uint8_t digest[SHA256_DIGEST_SIZE]) {
+    uint32_t words[8] = {
+        state->a, state->b, state->c, state->d,
+        state->e, state->f, state->g, state->h
+    };
+
+    for (size_t i = 0; i < 8; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            digest[i * 4 + j] = words[i] >> (8 * (3 - j));
+        }
     }
 }
 
@@ -118,7 +175,7 @@ static void sha256_process_block(const uint8_t *block, sha256_state_t *state) {
     }
 }
 
-static void sha256_schedule(uint32_t schedule[SCHEDULE_SIZE_U32], const uint8_t block[BLOCK_SIZE_U8]) {
+static void sha256_schedule(uint32_t schedule[SCHEDULE_SIZE_U32], const uint8_t block[SHA256_BLOCK_SIZE]) {
     //First we copy the 64 byte message block into the first 16 entry of the message schedule
 for (size_t i = 0; i < 16; i++)
     {
@@ -159,55 +216,20 @@ static void sha256_state_update(sha256_state_t *state, const sha256_state_t *old
 }
 
 /**
- * @brief Pad the message according to sha256 algorithm
- * @param[in] message The original message
- * @param[out] size The original size, contain the new size afterward
- * @return The new padded message
- */
-static uint8_t *sha256_message_pad(uint8_t *message, size_t *size) {
-    size_t old_size;
-    uint8_t *padded_message;
-
-    old_size = *size;
-    padded_message = sha256_message_extend(size);
-    if (padded_message == NULL) {
-        return NULL;
-    }
-    memcpy(padded_message, message, old_size);
-    sha256_message_fill(padded_message + old_size, *size - old_size);
-    sha256_message_append_size(old_size, padded_message + *size - 8);
-    return padded_message;
-}
-
-/**
- * @brief Allocate extra memory to pad the message
- * @param[out] size The size of the message, will contain the extended size at
- * exit
- * @return A pointer to the new message, NULL if an error occurred
- */
-static uint8_t *sha256_message_extend(size_t *size) {
-    size_t padding;
-    uint8_t *extended_message;
-
-    padding = PADDING_MODULO + PADDING_SIZE - (*size + PADDING_SIZE) % PADDING_MODULO;
-    extended_message = malloc(*size + padding);
-    if (extended_message == NULL) {
-        return NULL;
-    }
-    *size += padding;
-    return extended_message;
-}
-
-/**
  * @brief Fill the message with the sha256 padding pattern
- * @param[out] ptr A pointer to the end of the original message which correspond
- * to the start of the padding area.
- * @param[in] padding The size added to the original message to extend it
+ * @param[in] ctx sha256 context
+ * @param[in] first Flag used to append a `1` bit or not
  */
-static void sha256_message_fill(uint8_t *ptr, size_t padding) {
-    *ptr++ = 0x80;
-    for (size_t i = 1; i < padding; i++) {
-        *ptr++ = 0x00;
+static void sha256_message_fill(sha256_ctx *ctx, bool first) {
+    if (first)
+    {
+        ctx->buffer[ctx->buffer_len] = 0x80;
+        ctx->buffer_len++;
+    }
+    while (ctx->buffer_len != SHA256_BLOCK_SIZE)
+    {
+        ctx->buffer[ctx->buffer_len] = 0x00;
+        ctx->buffer_len++;
     }
 }
 

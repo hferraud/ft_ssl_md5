@@ -10,25 +10,28 @@
 #include "sha256/sha256.h"
 #include "parser.h"
 
-typedef ft_ssl_status_t(*hash_function_t) (uint8_t*, size_t, uint8_t*);
+typedef void(*hash_str_t)(const char *, uint8_t *);
+typedef ssize_t(*hash_fd_t) (int, bool, uint8_t*);
 
 struct command_s {
     char *name;
     char *display_name;
     size_t digest_size;
-    hash_function_t hash_function;
+    hash_str_t hash_str_function;
+    hash_fd_t hash_fd_function;
 };
 
 static void command_help(struct command_s *command_table);
 static ft_ssl_status_t command_router(struct command_s *command_table, int argc, char **argv);
 static ft_ssl_status_t command_run(struct command_s *command, ft_ssl_options_t *options);
+static ft_ssl_status_t command_run_stdin(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest);
 static ft_ssl_status_t command_run_strings(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest);
 static void print_digest(uint8_t *digest, size_t digest_size);
 
 int main(int argc, char **argv) {
     struct command_s commands[] = {
-        {"md5", "MD5", MD5_DIGEST_SIZE, md5},
-        {"sha256", "SHA256", SHA256_DIGEST_SIZE, sha256},
+        {"md5", "MD5", MD5_DIGEST_SIZE, NULL, NULL},
+        {"sha256", "SHA256", SHA256_DIGEST_SIZE, sha256_str, sha256_fd},
         {0}
     };
 
@@ -73,28 +76,51 @@ static ft_ssl_status_t command_run(struct command_s *command, ft_ssl_options_t *
     {
         return FT_SSL_ERROR;
     }
+    command_run_stdin(command, options, digest);
     command_run_strings(command, options, digest);
     free(digest);
     return FT_SSL_OK;
 }
 
-// static ft_ssl_status_t command_run_stdin(struct command_s *command, ft_ssl_options_t *options)
-// {
-//
-// }
-//
+static ft_ssl_status_t command_run_stdin(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest)
+{
+    if (options->quiet)
+    {
+        if (sha256_fd(STDIN_FILENO, false, digest) >= 0)
+        {
+            print_digest(digest, command->digest_size);
+        }
+
+    } else if (options->print_back)
+    {
+        if (sha256_fd(STDIN_FILENO, true, digest) >= 0)
+        {
+            return FT_SSL_ERROR;
+        }
+        print_digest(digest, command->digest_size);
+    } else
+    {
+        printf("(stdin) = ");
+        if (sha256_fd(STDIN_FILENO, false, digest) != FT_SSL_OK)
+        {
+            return FT_SSL_ERROR;
+        }
+    }
+    return FT_SSL_OK;
+}
+
 // static ft_ssl_status_t command_run_file(struct command_s *command, ft_ssl_options_t *options)
 // {
+//     uint8_t *buffer;
+//
+//
 // }
 
 static ft_ssl_status_t command_run_strings(struct command_s *command, ft_ssl_options_t *options, uint8_t *digest)
 {
     for (size_t i = 0; i < options->string_count; i++)
     {
-        if (command->hash_function((uint8_t*)options->strings[i], strlen(options->strings[i]), digest) != FT_SSL_OK)
-        {
-            return FT_SSL_ERROR;
-        }
+        command->hash_str_function(options->strings[i], digest);
         if (options->quiet)
         {
             print_digest(digest, command->digest_size);
